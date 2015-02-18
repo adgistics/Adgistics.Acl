@@ -1,0 +1,48 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 2013
+VisualStudioVersion = 12.0.30723.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Adgistics.Acl", "Adgistics.Acl\Adgistics.Acl.csproj", "{AB7C899C-3151-4C6D-8E1E-F3179D69F577}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Adgistics.Acl-Test", "Adgistics.Acl-Test\Adgistics.Acl-Test.csproj", "{F9673E8E-C66F-415B-8247-A1F1FFD04B17}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Adgistics.Acl.Repos.Sqlite", "Adgistics.Acl.Repos.Sqlite\Adgistics.Acl.Repos.Sqlite.csproj", "{2F224754-860E-4B3A-8612-297285F18754}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		ArpDebug|Any CPU = ArpDebug|Any CPU
+		ArpRelease|Any CPU = ArpRelease|Any CPU
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{AB7C899C-3151-4C6D-8E1E-F3179D69F577}.ArpDebug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AB7C899C-3151-4C6D-8E1E-F3179D69F577}.ArpDebug|Any CPU.Build.0 = Debug|Any CPU
+		{AB7C899C-3151-4C6D-8E1E-F3179D69F577}.ArpRelease|Any CPU.ActiveCfg = Release|Any CPU
+		{AB7C899C-3151-4C6D-8E1E-F3179D69F577}.ArpRelease|Any CPU.Build.0 = Release|Any CPU
+		{AB7C899C-3151-4C6D-8E1E-F3179D69F577}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AB7C899C-3151-4C6D-8E1E-F3179D69F577}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AB7C899C-3151-4C6D-8E1E-F3179D69F577}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AB7C899C-3151-4C6D-8E1E-F3179D69F577}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F9673E8E-C66F-415B-8247-A1F1FFD04B17}.ArpDebug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F9673E8E-C66F-415B-8247-A1F1FFD04B17}.ArpDebug|Any CPU.Build.0 = Debug|Any CPU
+		{F9673E8E-C66F-415B-8247-A1F1FFD04B17}.ArpRelease|Any CPU.ActiveCfg = Release|Any CPU
+		{F9673E8E-C66F-415B-8247-A1F1FFD04B17}.ArpRelease|Any CPU.Build.0 = Release|Any CPU
+		{F9673E8E-C66F-415B-8247-A1F1FFD04B17}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F9673E8E-C66F-415B-8247-A1F1FFD04B17}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F9673E8E-C66F-415B-8247-A1F1FFD04B17}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F9673E8E-C66F-415B-8247-A1F1FFD04B17}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2F224754-860E-4B3A-8612-297285F18754}.ArpDebug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2F224754-860E-4B3A-8612-297285F18754}.ArpDebug|Any CPU.Build.0 = Debug|Any CPU
+		{2F224754-860E-4B3A-8612-297285F18754}.ArpRelease|Any CPU.ActiveCfg = Release|Any CPU
+		{2F224754-860E-4B3A-8612-297285F18754}.ArpRelease|Any CPU.Build.0 = Release|Any CPU
+		{2F224754-860E-4B3A-8612-297285F18754}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2F224754-860E-4B3A-8612-297285F18754}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2F224754-860E-4B3A-8612-297285F18754}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2F224754-860E-4B3A-8612-297285F18754}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  
+  <!-- The projects to be released. -->
+  <ItemGroup>
+    <Projects Include="..\Modules.Acl.Core\Modules.Acl.Core.csproj" />
+  </ItemGroup>
+
+  <!-- The test projects. -->
+  <ItemGroup>
+    <TestProjects Include="..\Modules.Acl-Test\Modules.Acl-Test.csproj" />
+  </ItemGroup>
+
+  <!--
+    Runs the Build and Testing for each of the projects.
+  -->
+  <Target Name="Build">
+    <!-- Run projects in debug mode to ensure Tests -->
+    <MSBuild Projects="@(Projects)" Targets="Build" Properties="Configuration=ArpDebug;" ToolsVersion="12.0" />
+    <MSBuild Projects="@(TestProjects)" Targets="Test" Properties="Configuration=ArpDebug;" ToolsVersion="12.0" />
+  </Target>
+  
+  <!--
+    Creates the release distributions for each of the Projects.
+  -->
+  <Target Name="Release" DependsOnTargets="Build">
+    <!-- Run the release  -->
+    <MSBuild Projects="@(Projects)" Targets="Distribution" Properties="Configuration=ArpRelease;AllowPackageDeploy=true;" ToolsVersion="12.0" />
+  </Target>
+
+</Project>

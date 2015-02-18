@@ -1,0 +1,1344 @@
+From 7d8654f52b8e32d46eba854741a026ef3debd97c Mon Sep 17 00:00:00 2001
+From: Sean Matheson <iaresean@gmail.com>
+Date: Wed, 11 Feb 2015 14:26:32 +0000
+Subject: [PATCH] FIXED: Broken acl rule resolution after huge refactor.
+
+---
+ .../Modules.Acl-Test/Core/TestAccessControlList.cs |  63 +++++++-
+ source/Modules.Acl-Test/Example/AdminPrivilege.cs  |  20 ---
+ .../Modules.Acl-Test/Example/ArchivePrivilege.cs   |  20 ---
+ source/Modules.Acl-Test/Example/DeletePrivilege.cs |  20 ---
+ source/Modules.Acl-Test/Example/EditPrivilege.cs   |  20 ---
+ source/Modules.Acl-Test/Example/Principals/User.cs |  34 +++++
+ .../Example/Privileges/AdminPrivilege.cs           |  20 +++
+ .../Example/Privileges/ArchivePrivilege.cs         |  20 +++
+ .../Example/Privileges/DeletePrivilege.cs          |  20 +++
+ .../Example/Privileges/EditPrivilege.cs            |  20 +++
+ .../Example/Privileges/PublishPrivilege.cs         |  20 +++
+ .../Example/Privileges/RevisePrivilege.cs          |  20 +++
+ .../Example/Privileges/SubmitPrivilege.cs          |  20 +++
+ .../Example/Privileges/UpdatePrivilege.cs          |  20 +++
+ .../Example/Privileges/ViewPrivilege.cs            |  20 +++
+ .../Modules.Acl-Test/Example/PublishPrivilege.cs   |  20 ---
+ source/Modules.Acl-Test/Example/Resource.cs        |  27 ----
+ .../Modules.Acl-Test/Example/Resources/Resource.cs |  27 ++++
+ source/Modules.Acl-Test/Example/RevisePrivilege.cs |  20 ---
+ source/Modules.Acl-Test/Example/SubmitPrivilege.cs |  20 ---
+ source/Modules.Acl-Test/Example/UpdatePrivilege.cs |  20 ---
+ source/Modules.Acl-Test/Example/ViewPrivilege.cs   |  20 ---
+ source/Modules.Acl-Test/Modules.Acl-Test.csproj    |  21 +--
+ source/Modules.Acl.Core/AccessControl.cs           |   3 +-
+ source/Modules.Acl.Core/IUser.cs                   |  11 +-
+ .../Modules.Acl.Core/Internal/RuleAssertCache.cs   |  15 --
+ .../Internal/Rules/ResourceRule.cs                 |   1 +
+ .../Internal/Rules/RuleAssertCache.cs              |  12 ++
+ .../Internal/Rules/RuleAssertResult.cs             |  15 ++
+ source/Modules.Acl.Core/Internal/Rules/Ruleset.cs  |   4 +-
+ source/Modules.Acl.Core/Modules.Acl.Core.csproj    |   3 +-
+ source/Modules.Acl.Core/Resources.cs               |  32 ++--
+ source/Modules.Acl.Core/Rules.cs                   | 165 +++++++++++++++------
+ 33 files changed, 489 insertions(+), 304 deletions(-)
+ delete mode 100644 source/Modules.Acl-Test/Example/AdminPrivilege.cs
+ delete mode 100644 source/Modules.Acl-Test/Example/ArchivePrivilege.cs
+ delete mode 100644 source/Modules.Acl-Test/Example/DeletePrivilege.cs
+ delete mode 100644 source/Modules.Acl-Test/Example/EditPrivilege.cs
+ create mode 100644 source/Modules.Acl-Test/Example/Principals/User.cs
+ create mode 100644 source/Modules.Acl-Test/Example/Privileges/AdminPrivilege.cs
+ create mode 100644 source/Modules.Acl-Test/Example/Privileges/ArchivePrivilege.cs
+ create mode 100644 source/Modules.Acl-Test/Example/Privileges/DeletePrivilege.cs
+ create mode 100644 source/Modules.Acl-Test/Example/Privileges/EditPrivilege.cs
+ create mode 100644 source/Modules.Acl-Test/Example/Privileges/PublishPrivilege.cs
+ create mode 100644 source/Modules.Acl-Test/Example/Privileges/RevisePrivilege.cs
+ create mode 100644 source/Modules.Acl-Test/Example/Privileges/SubmitPrivilege.cs
+ create mode 100644 source/Modules.Acl-Test/Example/Privileges/UpdatePrivilege.cs
+ create mode 100644 source/Modules.Acl-Test/Example/Privileges/ViewPrivilege.cs
+ delete mode 100644 source/Modules.Acl-Test/Example/PublishPrivilege.cs
+ delete mode 100644 source/Modules.Acl-Test/Example/Resource.cs
+ create mode 100644 source/Modules.Acl-Test/Example/Resources/Resource.cs
+ delete mode 100644 source/Modules.Acl-Test/Example/RevisePrivilege.cs
+ delete mode 100644 source/Modules.Acl-Test/Example/SubmitPrivilege.cs
+ delete mode 100644 source/Modules.Acl-Test/Example/UpdatePrivilege.cs
+ delete mode 100644 source/Modules.Acl-Test/Example/ViewPrivilege.cs
+ delete mode 100644 source/Modules.Acl.Core/Internal/RuleAssertCache.cs
+ create mode 100644 source/Modules.Acl.Core/Internal/Rules/RuleAssertCache.cs
+ create mode 100644 source/Modules.Acl.Core/Internal/Rules/RuleAssertResult.cs
+
+diff --git a/source/Modules.Acl-Test/Core/TestAccessControlList.cs b/source/Modules.Acl-Test/Core/TestAccessControlList.cs
+index 7053fae..4e7f5be 100644
+--- a/source/Modules.Acl-Test/Core/TestAccessControlList.cs
++++ b/source/Modules.Acl-Test/Core/TestAccessControlList.cs
+@@ -22,8 +22,6 @@ namespace Modules.Acl.Core
+     [TestFixture]
+     public class TestAccessControlList
+     {
+-        private static TimeSpan _currentTime;
+-
+         [Test]
+         public void BasicUsage()
+         {
+@@ -99,6 +97,62 @@ namespace Modules.Acl.Core
+                 "5.2");
+         }
+ 
++        [Test]
++        public void UserPrincipal()
++        {
++            var accessControl = new AccessControl();
++            var rules = accessControl.Rules;
++            var groups = accessControl.Groups;
++            var resources = accessControl.Resources;
++
++            //
++            // Create groups
++            var groupGuest = groups.Create("guest");
++
++            //
++            // Create users
++            var userBob = new User("bob");
++
++            //
++            // Register resources
++            var resourceNews = new Resource("news");
++            resources.RegisterResource(resourceNews);
++
++            var resourceSports = new Resource("sports news");
++            resources.RegisterResource(resourceSports, resourceNews);
++
++            //
++            // Check allows when no permissions have been assigned
++            Assert.IsFalse(rules.IsAllowed<AllPrivileges>(groupGuest, resourceNews), "1.1");
++            Assert.IsFalse(rules.IsAllowed<ViewPrivilege>(groupGuest, resourceNews), "1.2");
++            Assert.IsFalse(rules.IsAllowed<ViewPrivilege>(groupGuest, resourceSports), "1.3");
++            Assert.IsFalse(rules.IsAllowed<AllPrivileges>(userBob, resourceNews), "1.4");
++            Assert.IsFalse(rules.IsAllowed<ViewPrivilege>(userBob, resourceNews), "1.5");
++            Assert.IsFalse(rules.IsAllowed<ViewPrivilege>(userBob, resourceSports), "1.6");
++
++            //
++            // Assign user to group
++            userBob.AssignToGroup(groupGuest);
++
++            //
++            // Allow permission to group
++            rules.Allow<ViewPrivilege>(groupGuest, resourceSports);
++
++            Assert.IsFalse(rules.IsAllowed<ViewPrivilege>(groupGuest, resourceNews), "2.1");
++            Assert.IsTrue(rules.IsAllowed<ViewPrivilege>(groupGuest, resourceSports), "2.2");
++            Assert.IsFalse(rules.IsAllowed<ViewPrivilege>(userBob, resourceNews), "2.3");
++            Assert.IsTrue(rules.IsAllowed<ViewPrivilege>(userBob, resourceSports), "2.4");
++
++            //
++            // Allow permission to user
++            rules.Allow<ViewPrivilege>(userBob, resourceNews);
++
++            Assert.IsFalse(rules.IsAllowed<ViewPrivilege>(groupGuest, resourceNews), "3.1");
++            Assert.IsTrue(rules.IsAllowed<ViewPrivilege>(groupGuest, resourceSports), "3.2");
++            Assert.IsTrue(rules.IsAllowed<ViewPrivilege>(userBob, resourceNews), "3.3");
++            Assert.IsTrue(rules.IsAllowed<ViewPrivilege>(userBob, resourceSports), "3.4");
++        }
++
+         private Type[] ToTypeArray(IEnumerable<IPrivilege> privileges)
+         {
+             return privileges.Select(x => x.GetType()).ToArray();
+@@ -444,6 +498,11 @@ namespace Modules.Acl.Core
+                 rules.IsAllowed<ArchivePrivilege>(
+                     groupAdmin,
+                     resourceAnnouncement));
++
++
++            // NOTE: The Constraint functionality was removed as it was felt
++            // that it made the ACL rulesets assertions difficult to cache and/or
++            // optimize.
+         }
+     }
+ }
+\ No newline at end of file
+diff --git a/source/Modules.Acl-Test/Example/AdminPrivilege.cs b/source/Modules.Acl-Test/Example/AdminPrivilege.cs
+deleted file mode 100644
+index 9c2a075..0000000
+--- a/source/Modules.Acl-Test/Example/AdminPrivilege.cs
++++ /dev/null
+@@ -1,20 +0,0 @@
+-﻿namespace Modules.Acl.Example
+-{
+-    public sealed class AdminPrivilege : IPrivilege
+-    {
+-        private const string _identifier = "Admin";
+-
+-        private const string _description =
+-            "Grants 'admin' privileges for resources.";
+-
+-        public string Identifier
+-        {
+-            get { return _identifier; }
+-        }
+-
+-        public string Description
+-        {
+-            get { return _description; }
+-        }
+-    }
+-}
+\ No newline at end of file
+diff --git a/source/Modules.Acl-Test/Example/ArchivePrivilege.cs b/source/Modules.Acl-Test/Example/ArchivePrivilege.cs
+deleted file mode 100644
+index 0f8c21b..0000000
+--- a/source/Modules.Acl-Test/Example/ArchivePrivilege.cs
++++ /dev/null
+@@ -1,20 +0,0 @@
+-﻿namespace Modules.Acl.Example
+-{
+-    public sealed class ArchivePrivilege : IPrivilege
+-    {
+-        private const string _identifier = "Archive";
+-
+-        private const string _description =
+-            "Grants 'archive' privileges for resources.";
+-
+-        public string Identifier
+-        {
+-            get { return _identifier; }
+-        }
+-
+-        public string Description
+-        {
+-            get { return _description; }
+-        }
+-    }
+-}
+\ No newline at end of file
+diff --git a/source/Modules.Acl-Test/Example/DeletePrivilege.cs b/source/Modules.Acl-Test/Example/DeletePrivilege.cs
+deleted file mode 100644
+index cc920ee..0000000
+--- a/source/Modules.Acl-Test/Example/DeletePrivilege.cs
++++ /dev/null
+@@ -1,20 +0,0 @@
+-﻿namespace Modules.Acl.Example
+-{
+-    public sealed class DeletePrivilege : IPrivilege
+-    {
+-        private const string _identifier = "Delete";
+-
+-        private const string _description =
+-            "Grants 'delete' privileges for resources.";
+-
+-        public string Identifier
+-        {
+-            get { return _identifier; }
+-        }
+-
+-        public string Description
+-        {
+-            get { return _description; }
+-        }
+-    }
+-}
+\ No newline at end of file
+diff --git a/source/Modules.Acl-Test/Example/EditPrivilege.cs b/source/Modules.Acl-Test/Example/EditPrivilege.cs
+deleted file mode 100644
+index 903138e..0000000
+--- a/source/Modules.Acl-Test/Example/EditPrivilege.cs
++++ /dev/null
+@@ -1,20 +0,0 @@
+-﻿namespace Modules.Acl.Example
+-{
+-    public sealed class EditPrivilege : IPrivilege
+-    {
+-        private const string _identifier = "Edit";
+-
+-        private const string _description =
+-            "Grants 'edit' privileges for resources.";
+-
+-        public string Identifier
+-        {
+-            get { return _identifier; }
+-        }
+-
+-        public string Description
+-        {
+-            get { return _description; }
+-        }
+-    }
+-}
+\ No newline at end of file
+diff --git a/source/Modules.Acl-Test/Example/Principals/User.cs b/source/Modules.Acl-Test/Example/Principals/User.cs
+new file mode 100644
+index 0000000..3ef0acd
+--- /dev/null
++++ b/source/Modules.Acl-Test/Example/Principals/User.cs
+@@ -0,0 +1,34 @@
++using System;
++using System.Collections.Generic;
++
++namespace Modules.Acl.Core
++{
++    public class User : IUser
++    {
++        private readonly List<string> _groupNames;
++
++        public User(string name)
++        {
++            Identifier = Guid.NewGuid();
++            _groupNames = new List<string>();
++            Name = name;
++        }
++
++        public Guid Identifier { get; private set; }
++
++        public string Name { get; private set; }
++
++        public IEnumerable<string> Groups
++        {
++            get { return new List<string>(_groupNames); }
++        }
++
++        public void AssignToGroup(Group groupGuest)
++        {
++            if (false == _groupNames.Contains(groupGuest.Name))
++            {
++                _groupNames.Add(groupGuest.Name);
++            }
++        }
++    }
++}
+\ No newline at end of file
+diff --git a/source/Modules.Acl-Test/Example/Privileges/AdminPrivilege.cs b/source/Modules.Acl-Test/Example/Privileges/AdminPrivilege.cs
+new file mode 100644
+index 0000000..9c2a075
+--- /dev/null
++++ b/source/Modules.Acl-Test/Example/Privileges/AdminPrivilege.cs
+@@ -0,0 +1,20 @@
++﻿namespace Modules.Acl.Example
++{
++    public sealed class AdminPrivilege : IPrivilege
++    {
++        private const string _identifier = "Admin";
++
++        private const string _description =
++            "Grants 'admin' privileges for resources.";
++
++        public string Identifier
++        {
++            get { return _identifier; }
++        }
++
++        public string Description
++        {
++            get { return _description; }
++        }
++    }
++}
+\ No newline at end of file
+diff --git a/source/Modules.Acl-Test/Example/Privileges/ArchivePrivilege.cs b/source/Modules.Acl-Test/Example/Privileges/ArchivePrivilege.cs
+new file mode 100644
+index 0000000..0f8c21b
+--- /dev/null
++++ b/source/Modules.Acl-Test/Example/Privileges/ArchivePrivilege.cs
+@@ -0,0 +1,20 @@
++﻿namespace Modules.Acl.Example
++{
++    public sealed class ArchivePrivilege : IPrivilege
++    {
++        private const string _identifier = "Archive";
++
++        private const string _description =
++            "Grants 'archive' privileges for resources.";
++
++        public string Identifier
++        {
++            get { return _identifier; }
++        }
++
++        public string Description
++        {
++            get { return _description; }
++        }
++    }
++}
+\ No newline at end of file
+diff --git a/source/Modules.Acl-Test/Example/Privileges/DeletePrivilege.cs b/source/Modules.Acl-Test/Example/Privileges/DeletePrivilege.cs
+new file mode 100644
+index 0000000..cc920ee
+--- /dev/null
++++ b/source/Modules.Acl-Test/Example/Privileges/DeletePrivilege.cs
+@@ -0,0 +1,20 @@
++﻿namespace Modules.Acl.Example
++{
++    public sealed class DeletePrivilege : IPrivilege
++    {
++        private const string _identifier = "Delete";
++
++        private const string _description =
++            "Grants 'delete' privileges for resources.";
++
++        public string Identifier
++        {
++            get { return _identifier; }
++        }
++
++        public string Description
++        {
++            get { return _description; }
++        }
++    }
++}
+\ No newline at end of file
+diff --git a/source/Modules.Acl-Test/Example/Privileges/EditPrivilege.cs b/source/Modules.Acl-Test/Example/Privileges/EditPrivilege.cs
+new file mode 100644
+index 0000000..903138e
+--- /dev/null
++++ b/source/Modules.Acl-Test/Example/Privileges/EditPrivilege.cs
+@@ -0,0 +1,20 @@
++﻿namespace Modules.Acl.Example
++{
++    public sealed class EditPrivilege : IPrivilege
++    {
++        private const string _identifier = "Edit";
++
++        private const string _description =
++            "Grants 'edit' privileges for resources.";
++
++        public string Identifier
++        {
++            get { return _identifier; }
++        }
++
++        public string Description
++        {
++            get { return _description; }
++        }
++    }
++}
+\ No newline at end of file
+diff --git a/source/Modules.Acl-Test/Example/Privileges/PublishPrivilege.cs b/source/Modules.Acl-Test/Example/Privileges/PublishPrivilege.cs
+new file mode 100644
+index 0000000..f61c29d
+--- /dev/null
++++ b/source/Modules.Acl-Test/Example/Privileges/PublishPrivilege.cs
+@@ -0,0 +1,20 @@
++﻿namespace Modules.Acl.Example
++{
++    public sealed class PublishPrivilege : IPrivilege
++    {
++        private const string _identifier = "Publish";
++
++        private const string _description =
++            "Grants 'publish' privileges for resources.";
++
++        public string Identifier
++        {
++            get { return _identifier; }
++        }
++
++        public string Description
++        {
++            get { return _description; }
++        }
++    }
++}
+\ No newline at end of file
+diff --git a/source/Modules.Acl-Test/Example/Privileges/RevisePrivilege.cs b/source/Modules.Acl-Test/Example/Privileges/RevisePrivilege.cs
+new file mode 100644
+index 0000000..36c68a3
+--- /dev/null
++++ b/source/Modules.Acl-Test/Example/Privileges/RevisePrivilege.cs
+@@ -0,0 +1,20 @@
++﻿namespace Modules.Acl.Example
++{
++    public sealed class RevisePrivilege : IPrivilege
++    {
++        private const string _identifier = "Revise";
++
++        private const string _description =
++            "Grants 'revise' privileges for resources.";
++
++        public string Identifier
++        {
++            get { return _identifier; }
++        }
++
++        public string Description
++        {
++            get { return _description; }
++        }
++    }
++}
+\ No newline at end of file
+diff --git a/source/Modules.Acl-Test/Example/Privileges/SubmitPrivilege.cs b/source/Modules.Acl-Test/Example/Privileges/SubmitPrivilege.cs
+new file mode 100644
+index 0000000..ed0ddf0
+--- /dev/null
++++ b/source/Modules.Acl-Test/Example/Privileges/SubmitPrivilege.cs
+@@ -0,0 +1,20 @@
++﻿namespace Modules.Acl.Example
++{
++    public sealed class SubmitPrivilege : IPrivilege
++    {
++        private const string _identifier = "Submit";
++
++        private const string _description =
++            "Grants 'submit' privileges for resources.";
++
++        public string Identifier
++        {
++            get { return _identifier; }
++        }
++
++        public string Description
++        {
++            get { return _description; }
++        }
++    }
++}
+\ No newline at end of file
+diff --git a/source/Modules.Acl-Test/Example/Privileges/UpdatePrivilege.cs b/source/Modules.Acl-Test/Example/Privileges/UpdatePrivilege.cs
+new file mode 100644
+index 0000000..1a3d3bd
+--- /dev/null
++++ b/source/Modules.Acl-Test/Example/Privileges/UpdatePrivilege.cs
+@@ -0,0 +1,20 @@
++﻿namespace Modules.Acl.Example
++{
++    public sealed class UpdatePrivilege : IPrivilege
++    {
++        private const string _identifier = "Update";
++
++        private const string _description =
++            "Grants 'update' privileges for resources.";
++
++        public string Identifier
++        {
++            get { return _identifier; }
++        }
++
++        public string Description
++        {
++            get { return _description; }
++        }
++    }
++}
+\ No newline at end of file
+diff --git a/source/Modules.Acl-Test/Example/Privileges/ViewPrivilege.cs b/source/Modules.Acl-Test/Example/Privileges/ViewPrivilege.cs
+new file mode 100644
+index 0000000..accd526
+--- /dev/null
++++ b/source/Modules.Acl-Test/Example/Privileges/ViewPrivilege.cs
+@@ -0,0 +1,20 @@
++﻿namespace Modules.Acl.Example
++{
++    public sealed class ViewPrivilege : IPrivilege
++    {
++        private const string _identifier = "View";
++
++        private const string _description =
++            "Grants 'view' privileges for resources.";
++
++        public string Identifier
++        {
++            get { return _identifier; }
++        }
++
++        public string Description
++        {
++            get { return _description; }
++        }
++    }
++}
+\ No newline at end of file
+diff --git a/source/Modules.Acl-Test/Example/PublishPrivilege.cs b/source/Modules.Acl-Test/Example/PublishPrivilege.cs
+deleted file mode 100644
+index f61c29d..0000000
+--- a/source/Modules.Acl-Test/Example/PublishPrivilege.cs
++++ /dev/null
+@@ -1,20 +0,0 @@
+-﻿namespace Modules.Acl.Example
+-{
+-    public sealed class PublishPrivilege : IPrivilege
+-    {
+-        private const string _identifier = "Publish";
+-
+-        private const string _description =
+-            "Grants 'publish' privileges for resources.";
+-
+-        public string Identifier
+-        {
+-            get { return _identifier; }
+-        }
+-
+-        public string Description
+-        {
+-            get { return _description; }
+-        }
+-    }
+-}
+\ No newline at end of file
+diff --git a/source/Modules.Acl-Test/Example/Resource.cs b/source/Modules.Acl-Test/Example/Resource.cs
+deleted file mode 100644
+index c285052..0000000
+--- a/source/Modules.Acl-Test/Example/Resource.cs
++++ /dev/null
+@@ -1,27 +0,0 @@
+-﻿// *****************************************************************************
+-// * Copyright (c) Adgistics Limited and others. All rights reserved.
+-// * The contents of this file are subject to the terms of the
+-// * Adgistics Development and Distribution License (the "License").
+-// * You may not use this file except in compliance with the License.
+-// *
+-// * http://www.adgistics.com/license.html
+-// *
+-// * See the License for the specific language governing permissions
+-// * and limitations under the License.
+-// *****************************************************************************
+-
+-using Modules.Acl.Core;
+-
+-namespace Modules.Acl.Example
+-{
+-    internal sealed class Resource : IResource
+-    {
+-        public Resource(string identifier)
+-        {
+-            ResourceId = new ResourceId(
+-                "Modules.Acl.Example.Resource", identifier);
+-        }
+-
+-        public ResourceId ResourceId { get; private set; }
+-    }
+-}
+\ No newline at end of file
+diff --git a/source/Modules.Acl-Test/Example/Resources/Resource.cs b/source/Modules.Acl-Test/Example/Resources/Resource.cs
+new file mode 100644
+index 0000000..c285052
+--- /dev/null
++++ b/source/Modules.Acl-Test/Example/Resources/Resource.cs
+@@ -0,0 +1,27 @@
++﻿// *****************************************************************************
++// * Copyright (c) Adgistics Limited and others. All rights reserved.
++// * The contents of this file are subject to the terms of the
++// * Adgistics Development and Distribution License (the "License").
++// * You may not use this file except in compliance with the License.
++// *
++// * http://www.adgistics.com/license.html
++// *
++// * See the License for the specific language governing permissions
++// * and limitations under the License.
++// *****************************************************************************
++
++using Modules.Acl.Core;
++
++namespace Modules.Acl.Example
++{
++    internal sealed class Resource : IResource
++    {
++        public Resource(string identifier)
++        {
++            ResourceId = new ResourceId(
++                "Modules.Acl.Example.Resource", identifier);
++        }
++
++        public ResourceId ResourceId { get; private set; }
++    }
++}
+\ No newline at end of file
+diff --git a/source/Modules.Acl-Test/Example/RevisePrivilege.cs b/source/Modules.Acl-Test/Example/RevisePrivilege.cs
+deleted file mode 100644
+index 36c68a3..0000000
+--- a/source/Modules.Acl-Test/Example/RevisePrivilege.cs
++++ /dev/null
+@@ -1,20 +0,0 @@
+-﻿namespace Modules.Acl.Example
+-{
+-    public sealed class RevisePrivilege : IPrivilege
+-    {
+-        private const string _identifier = "Revise";
+-
+-        private const string _description =
+-            "Grants 'revise' privileges for resources.";
+-
+-        public string Identifier
+-        {
+-            get { return _identifier; }
+-        }
+-
+-        public string Description
+-        {
+-            get { return _description; }
+-        }
+-    }
+-}
+\ No newline at end of file
+diff --git a/source/Modules.Acl-Test/Example/SubmitPrivilege.cs b/source/Modules.Acl-Test/Example/SubmitPrivilege.cs
+deleted file mode 100644
+index ed0ddf0..0000000
+--- a/source/Modules.Acl-Test/Example/SubmitPrivilege.cs
++++ /dev/null
+@@ -1,20 +0,0 @@
+-﻿namespace Modules.Acl.Example
+-{
+-    public sealed class SubmitPrivilege : IPrivilege
+-    {
+-        private const string _identifier = "Submit";
+-
+-        private const string _description =
+-            "Grants 'submit' privileges for resources.";
+-
+-        public string Identifier
+-        {
+-            get { return _identifier; }
+-        }
+-
+-        public string Description
+-        {
+-            get { return _description; }
+-        }
+-    }
+-}
+\ No newline at end of file
+diff --git a/source/Modules.Acl-Test/Example/UpdatePrivilege.cs b/source/Modules.Acl-Test/Example/UpdatePrivilege.cs
+deleted file mode 100644
+index 1a3d3bd..0000000
+--- a/source/Modules.Acl-Test/Example/UpdatePrivilege.cs
++++ /dev/null
+@@ -1,20 +0,0 @@
+-﻿namespace Modules.Acl.Example
+-{
+-    public sealed class UpdatePrivilege : IPrivilege
+-    {
+-        private const string _identifier = "Update";
+-
+-        private const string _description =
+-            "Grants 'update' privileges for resources.";
+-
+-        public string Identifier
+-        {
+-            get { return _identifier; }
+-        }
+-
+-        public string Description
+-        {
+-            get { return _description; }
+-        }
+-    }
+-}
+\ No newline at end of file
+diff --git a/source/Modules.Acl-Test/Example/ViewPrivilege.cs b/source/Modules.Acl-Test/Example/ViewPrivilege.cs
+deleted file mode 100644
+index accd526..0000000
+--- a/source/Modules.Acl-Test/Example/ViewPrivilege.cs
++++ /dev/null
+@@ -1,20 +0,0 @@
+-﻿namespace Modules.Acl.Example
+-{
+-    public sealed class ViewPrivilege : IPrivilege
+-    {
+-        private const string _identifier = "View";
+-
+-        private const string _description =
+-            "Grants 'view' privileges for resources.";
+-
+-        public string Identifier
+-        {
+-            get { return _identifier; }
+-        }
+-
+-        public string Description
+-        {
+-            get { return _description; }
+-        }
+-    }
+-}
+\ No newline at end of file
+diff --git a/source/Modules.Acl-Test/Modules.Acl-Test.csproj b/source/Modules.Acl-Test/Modules.Acl-Test.csproj
+index 15cbfdd..649b4fa 100644
+--- a/source/Modules.Acl-Test/Modules.Acl-Test.csproj
++++ b/source/Modules.Acl-Test/Modules.Acl-Test.csproj
+@@ -56,16 +56,17 @@
+     <Compile Include="Core\TestAccessControlList.cs" />
+     <Compile Include="Core\TestDirectedGraph.cs" />
+     <Compile Include="Core\TestGroups.cs" />
+-    <Compile Include="Example\DeletePrivilege.cs" />
+-    <Compile Include="Example\EditPrivilege.cs" />
+-    <Compile Include="Example\SubmitPrivilege.cs" />
+-    <Compile Include="Example\UpdatePrivilege.cs" />
+-    <Compile Include="Example\RevisePrivilege.cs" />
+-    <Compile Include="Example\ArchivePrivilege.cs" />
+-    <Compile Include="Example\Resource.cs" />
+-    <Compile Include="Example\AdminPrivilege.cs" />
+-    <Compile Include="Example\PublishPrivilege.cs" />
+-    <Compile Include="Example\ViewPrivilege.cs" />
++    <Compile Include="Example\Principals\User.cs" />
++    <Compile Include="Example\Privileges\DeletePrivilege.cs" />
++    <Compile Include="Example\Privileges\EditPrivilege.cs" />
++    <Compile Include="Example\Privileges\SubmitPrivilege.cs" />
++    <Compile Include="Example\Privileges\UpdatePrivilege.cs" />
++    <Compile Include="Example\Privileges\RevisePrivilege.cs" />
++    <Compile Include="Example\Privileges\ArchivePrivilege.cs" />
++    <Compile Include="Example\Resources\Resource.cs" />
++    <Compile Include="Example\Privileges\AdminPrivilege.cs" />
++    <Compile Include="Example\Privileges\PublishPrivilege.cs" />
++    <Compile Include="Example\Privileges\ViewPrivilege.cs" />
+     <Compile Include="Properties\AssemblyInfo.cs" />
+     <Compile Include="TestingFileResources.cs" />
+   </ItemGroup>
+diff --git a/source/Modules.Acl.Core/AccessControl.cs b/source/Modules.Acl.Core/AccessControl.cs
+index 9691d9d..bb19f69 100644
+--- a/source/Modules.Acl.Core/AccessControl.cs
++++ b/source/Modules.Acl.Core/AccessControl.cs
+@@ -3,10 +3,9 @@
+     using System;
+     using System.Collections.Concurrent;
+     using System.Linq;
+-    using System.Text.RegularExpressions;
+     using System.Threading;
+ 
+-    using Modules.Acl.Internal;
++    using Internal;
+ 
+     /// <summary>
+     ///   An access control configuration.
+diff --git a/source/Modules.Acl.Core/IUser.cs b/source/Modules.Acl.Core/IUser.cs
+index df37f2b..4b4fd08 100644
+--- a/source/Modules.Acl.Core/IUser.cs
++++ b/source/Modules.Acl.Core/IUser.cs
+@@ -3,10 +3,19 @@ using System.Collections.Generic;
+ 
+ namespace Modules.Acl
+ {
++    /// <summary>
++    ///   A 'user' type principal that can be used within the ACL module.
++    /// </summary>
+     public interface IUser : IPrincipal
+     {
++        /// <summary>
++        ///   Gets the identifier of the user.
++        /// </summary>
+         Guid Identifier { get; }
+ 
+-        IEnumerable<Guid> GroupIds { get; }
++        /// <summary>
++        ///   Gets the names of the groups that the user is assigned to.
++        /// </summary>
++        IEnumerable<string> Groups { get; }
+     }
+ }
+\ No newline at end of file
+diff --git a/source/Modules.Acl.Core/Internal/RuleAssertCache.cs b/source/Modules.Acl.Core/Internal/RuleAssertCache.cs
+deleted file mode 100644
+index 27abe75..0000000
+--- a/source/Modules.Acl.Core/Internal/RuleAssertCache.cs
++++ /dev/null
+@@ -1,15 +0,0 @@
+-﻿using System;
+-
+-namespace Modules.Acl.Internal
+-{
+-    internal sealed class RuleAssertCache
+-    {
+-        public Guid PrincipalId { get; private set; }
+-
+-        public Guid ResourceId { get; private set; }
+-
+-        public string PrivilegeId { get; private set; }
+-
+-        public bool IsAllowed { get; private set; }
+-    }
+-}
+\ No newline at end of file
+diff --git a/source/Modules.Acl.Core/Internal/Rules/ResourceRule.cs b/source/Modules.Acl.Core/Internal/Rules/ResourceRule.cs
+index 6524b48..bbd52c4 100644
+--- a/source/Modules.Acl.Core/Internal/Rules/ResourceRule.cs
++++ b/source/Modules.Acl.Core/Internal/Rules/ResourceRule.cs
+@@ -13,6 +13,7 @@ namespace Modules.Acl.Internal.Rules
+         public ResourceRule()
+         {
+             ByGroupName = new ConcurrentDictionary<string, PrincipalRule>();
++            ByUserId = new ConcurrentDictionary<Guid, PrincipalRule>();
+         }
+ 
+         #endregion Constructors
+diff --git a/source/Modules.Acl.Core/Internal/Rules/RuleAssertCache.cs b/source/Modules.Acl.Core/Internal/Rules/RuleAssertCache.cs
+new file mode 100644
+index 0000000..1480f34
+--- /dev/null
++++ b/source/Modules.Acl.Core/Internal/Rules/RuleAssertCache.cs
+@@ -0,0 +1,12 @@
++﻿namespace Modules.Acl.Internal
++{
++    internal sealed class RuleAssertCache
++    {
++        private readonly AccessControl _api;
++
++        public RuleAssertCache(AccessControl api)
++        {
++            _api = api;
++        }
++    }
++}
+\ No newline at end of file
+diff --git a/source/Modules.Acl.Core/Internal/Rules/RuleAssertResult.cs b/source/Modules.Acl.Core/Internal/Rules/RuleAssertResult.cs
+new file mode 100644
+index 0000000..9608acb
+--- /dev/null
++++ b/source/Modules.Acl.Core/Internal/Rules/RuleAssertResult.cs
+@@ -0,0 +1,15 @@
++﻿using System;
++
++namespace Modules.Acl.Internal
++{
++    internal sealed class RuleAssertResult
++    {
++        public Guid PrincipalId { get; private set; }
++
++        public Guid ResourceId { get; private set; }
++
++        public string PrivilegeId { get; private set; }
++
++        public bool IsAllowed { get; private set; }
++    }
++}
+\ No newline at end of file
+diff --git a/source/Modules.Acl.Core/Internal/Rules/Ruleset.cs b/source/Modules.Acl.Core/Internal/Rules/Ruleset.cs
+index b986915..ebd93a4 100644
+--- a/source/Modules.Acl.Core/Internal/Rules/Ruleset.cs
++++ b/source/Modules.Acl.Core/Internal/Rules/Ruleset.cs
+@@ -83,7 +83,7 @@ namespace Modules.Acl.Internal.Rules
+             Type privilege)
+         {
+             // get the rules for the $resource and $principal
+-            var rules = ResolveRuleFor(resource, principal);
++            var rules = ResolvePrincipalRuleFor(resource, principal);
+ 
+             if (null == rules)
+             {
+@@ -143,7 +143,7 @@ namespace Modules.Acl.Internal.Rules
+         ///   and then returned to the caller.   
+         ///   </para>
+         /// </remarks>
+-        public PrincipalRule ResolveRuleFor(
++        public PrincipalRule ResolvePrincipalRuleFor(
+             ResourceId resource = null,
+             IPrincipal principal = null,
+             bool create = false)
+diff --git a/source/Modules.Acl.Core/Modules.Acl.Core.csproj b/source/Modules.Acl.Core/Modules.Acl.Core.csproj
+index 4440ce5..4b3f2fb 100644
+--- a/source/Modules.Acl.Core/Modules.Acl.Core.csproj
++++ b/source/Modules.Acl.Core/Modules.Acl.Core.csproj
+@@ -47,7 +47,8 @@
+     <Compile Include="Events\GroupPropChangedEventArgs.cs" />
+     <Compile Include="Events\ResourceUnregisteredEventArgs.cs" />
+     <Compile Include="Exceptions\PrivilegeNotRegisteredException.cs" />
+-    <Compile Include="Internal\RuleAssertCache.cs" />
++    <Compile Include="Internal\Rules\RuleAssertResult.cs" />
++    <Compile Include="Internal\Rules\RuleAssertCache.cs" />
+     <Compile Include="Internal\Groups\GroupGraphRepository.cs" />
+     <Compile Include="Internal\Repositories.cs" />
+     <Compile Include="Internal\Resources\ResourceRepository.cs" />
+diff --git a/source/Modules.Acl.Core/Resources.cs b/source/Modules.Acl.Core/Resources.cs
+index d3f1f1b..fb6957d 100644
+--- a/source/Modules.Acl.Core/Resources.cs
++++ b/source/Modules.Acl.Core/Resources.cs
+@@ -164,14 +164,14 @@
+ 
+         /// <summary>
+         ///   Determines if <paramref name="resource"/> is registered as a child
+-        ///   of <paramref name="inherit"/>.
++        ///   of <paramref name="parent"/>.
+         /// </summary>
+         /// 
+         /// <param name="resource">The resource.</param>
+-        /// <param name="inherit">The inherit.</param>
+-        /// <param name="onlyParent">
+-        ///   If set to <c>true</c> then $resource must inherit directly from
+-        ///   $inherit in order to return true.
++        /// <param name="parent">The parent.</param>
++        /// <param name="onlyDirectParent">
++        ///   If set to <c>true</c> then $resource must parent directly from
++        ///   $parent in order to return true.
+         /// </param>
+         /// 
+         /// <returns>
+@@ -184,7 +184,7 @@
+         ///   </para>
+         ///   OR
+         ///   <para>
+-        ///   Argument 'inherit' cannot be null.
++        ///   Argument 'parent' cannot be null.
+         ///   </para>
+         ///   OR
+         ///   <para>
+@@ -194,43 +194,43 @@
+         /// 
+         /// <remarks>
+         ///   By default, this method looks through the entire inheritance tree 
+-        ///   to determine whether $resource inherits from $inherit through its 
++        ///   to determine whether $resource inherits from $parent through its 
+         ///   ancestor Resources.
+         /// </remarks>
+         public bool Inherits(
+             IResource resource,
+-            IResource inherit,
+-            bool onlyParent = false)
++            IResource parent,
++            bool onlyDirectParent = false)
+         {
+             if (resource == null)
+             {
+                 throw new ArgumentException("Argument 'resource' cannot be null.");
+             }
+-            if (inherit == null)
++            if (parent == null)
+             {
+-                throw new ArgumentException("Argument 'inherit' cannot be null.");
++                throw new ArgumentException("Argument 'parent' cannot be null.");
+             }
+ 
+             ResourceRegistration resourceReg;
+             ResourceRegistration inheritReg;
+             // TODO: Throw individual exceptions.
+             if (false == _resources.TryGetValue(resource.ResourceId, out resourceReg)
+-                && false == _resources.TryGetValue(inherit.ResourceId, out inheritReg))
++                && false == _resources.TryGetValue(parent.ResourceId, out inheritReg))
+             {
+                 throw new ArgumentException(
+                     string.Format(
+                         "Resources are not registered in ACL: '{0}', '{1}'",
+                         resource,
+-                        inherit));
++                        parent));
+             }
+ 
+             if (null != resourceReg.Parent)
+             {
+-                if (resourceReg.Parent.Equals(inherit))
++                if (resourceReg.Parent.Equals(parent))
+                 {
+                     return true;
+                 }
+-                if (onlyParent)
++                if (onlyDirectParent)
+                 {
+                     return false;
+                 }
+@@ -251,7 +251,7 @@
+ 
+                 resourceReg = parentReg;
+ 
+-                if (parentReg.Instance.Equals(inherit))
++                if (parentReg.Instance.Equals(parent))
+                 {
+                     return true;
+                 }
+diff --git a/source/Modules.Acl.Core/Rules.cs b/source/Modules.Acl.Core/Rules.cs
+index 9f882ac..62b416b 100644
+--- a/source/Modules.Acl.Core/Rules.cs
++++ b/source/Modules.Acl.Core/Rules.cs
+@@ -9,9 +9,13 @@
+ // The next bit of refactoring that should be done is:
+ // - Move all rule set actions into respective methods within the Rules classes.
+ // - 
++// TODO: Update documentation to reflect concept of IPrincipal rather than Group
++// TODO: Change Group identifier to be based on a Guid
+ 
+ #endregion Header
+ 
++using Modules.Acl.Internal;
++
+ namespace Modules.Acl
+ {
+     using System;
+@@ -85,11 +89,14 @@ namespace Modules.Acl
+         private readonly AccessControl _api;
+ 
+         /// <summary>
+-        ///   The acl rules for all groups, resources, privileges.
++        ///   The acl rules for all principals, resources, and privileges.
+         /// </summary>
+         private readonly Ruleset _ruleset;
++
+         private readonly RulesetRepository _rulesetRepository;
+ 
++        private readonly RuleAssertCache _ruleAssertCache;
++
+         #endregion Fields
+ 
+         #region Constructors
+@@ -113,6 +120,7 @@ namespace Modules.Acl
+             _api = api;
+             _rulesetRepository = api.Repositories.RulesetRepository;
+             _ruleset = _rulesetRepository.Load();
++            _ruleAssertCache = new RuleAssertCache(api);
+ 
+             // Add event binders
+             api.Events.GroupDeleted += OnGroupDeleted;
+@@ -329,7 +337,7 @@ namespace Modules.Acl
+         ///   will need to have access to all privileges for a resource in order
+         ///   to be given access.
+         /// </typeparam>
+-        /// <param name="group">The principal.</param>
++        /// <param name="principal">The principal.</param>
+         /// <param name="resource">The resource.</param>
+         /// 
+         /// <returns>
+@@ -378,20 +386,16 @@ namespace Modules.Acl
+         ///   </para>
+         /// </remarks>
+         public bool IsAllowed<TPrivilege>(
+-            Group @group = null,
++            IPrincipal principal = null,
+             IResource resource = null)
+             where TPrivilege : IPrivilege
+         {
+-            // This method checks Role inheritance using a depth-first traversal
+-            // of the Groups repository.
+-            // The highest priority parent (i.e., the parent most recently added)
+-            // is checked first, and its respective parents are checked similarly
+-            // before the lower-priority parents of the Group are checked.
+-
+-            if (@group != null && false == _api.Groups.Exists(group.Name))
++            if (principal is Group
++                && false == _api.Groups.Exists(((Group)principal).Name))
+             {
+                 throw new ArgumentException(
+-                    "Argument 'principal' has not been registered in the ACL system.");
++                    "Argument 'principal' refers to a group that has not been " +
++                    "registered in the ACL system.");
+             }
+             if (resource != null && false == _api.Resources.IsRegistered(resource))
+             {
+@@ -401,7 +405,34 @@ namespace Modules.Acl
+ 
+             var privilege = ParsePrivilegeType<TPrivilege>();
+ 
+-            return IsAllowed(@group, resource, privilege);
++            // TODO: Consult result cache first
++
++            if (IsAllowed(principal, resource, privilege))
++            {
++                return true;
++            }
++
++            if (principal is IUser)
++            {
++                // if this is a User principal, then we can check if any 
++                // of their groups grant them access.
++
++                // TODO: This needs to take the Group hierarchy into acccount!
++                foreach (var groupName in ((IUser)principal).Groups)
++                {
++                    var group = _api.Groups.Get(groupName);
++
++                    if (group != null)
++                    {
++                        if (IsAllowed(group, resource, privilege))
++                        {
++                            return true;
++                        }
++                    }
++                }
++            }
++
++            return false;
+         }
+ 
+         public IEnumerable<ResourceId> GetAllowed<TPrivilege>(
+@@ -597,7 +628,7 @@ namespace Modules.Acl
+                 {
+                     if (principal is Group)
+                     {
+-                        // depth-first search on $principal if it is not 'allRoles' pseudo-parent
++                        // depth-first search on Group
+                         bool? result = RoleDfsAllPrivileges(
+                             (Group)principal, resourceId);
+ 
+@@ -608,11 +639,18 @@ namespace Modules.Acl
+                     }
+                     else if (principal is IUser)
+                     {
+-                        throw new NotImplementedException();
++                        bool? result = DoesPrincipalHaveAccessTo(
++                            principal,
++                            resourceId);
++
++                        if (result != null)
++                        {
++                            return result.Value;
++                        }
+                     }
+ 
+                     // look for rule on 'allPrincipals'
+-                    PrincipalRule rules = _ruleset.ResolveRuleFor(resourceId);
++                    PrincipalRule rules = _ruleset.ResolvePrincipalRuleFor(resourceId);
+                     if (null != rules)
+                     {
+                         foreach (var priv in rules.ByPrivilegeType.Keys)
+@@ -656,8 +694,7 @@ namespace Modules.Acl
+                 {
+                     if (principal is Group)
+                     {
+-                        // depth-first search on $principal if it is not 'allRoles'
+-                        // pseudo-parent
++                        // depth-first search on Group
+                         bool? result = RoleDfsOnePrivilege(
+                             (Group)principal, resourceId, privilege);
+ 
+@@ -669,14 +706,12 @@ namespace Modules.Acl
+                     else if (principal is IUser)
+                     {
+                         // look for rule for user
+-                        RuleType? ruleTypeUser = _ruleset.GetRuleResultFor(
+-                            resourceId,
+-                            principal,
+-                            privilege);
++                        bool? result = DoesPrincipalHaveAccessTo(
++                            principal, resourceId, privilege);
+ 
+-                        if (ruleTypeUser != null)
++                        if (result != null)
+                         {
+-                            return RuleType.Allow == ruleTypeUser;
++                            return result.Value;
+                         }
+                     }
+ 
+@@ -872,36 +907,73 @@ namespace Modules.Acl
+                     "$dfs parameter may not be null");
+             }
+ 
+-            var rules = _ruleset.ResolveRuleFor(resource, @group);
++            bool? hasAccess = DoesPrincipalHaveAccessTo(@group, resource);
++
++            if (hasAccess != null)
++            {
++                return hasAccess;
++            }
+ 
+-            if (null != rules)
++            dfs.Visited.Add(@group);
++
++            var parentGroups = _api.Groups.GetParents(@group);
++            foreach (var roleParent in parentGroups)
+             {
+-                foreach (var privilege in rules.ByPrivilegeType.Keys)
++                dfs.Stack.Push(roleParent);
++            }
++
++            return null;
++        }
++
++        private bool? DoesPrincipalHaveAccessTo(
++            IPrincipal principal, ResourceId resource)
++        {
++            PrincipalRule principalRule =
++                _ruleset.ResolvePrincipalRuleFor(resource, principal);
++
++            if (null != principalRule)
++            {
++                foreach (var privilege in principalRule.ByPrivilegeType.Keys)
+                 {
+                     var ruleTypeOnePrivilege = _ruleset.GetRuleResultFor(
+-                        resource, @group, privilege);
++                        resource, principal, privilege);
+ 
+                     if (RuleType.Deny == ruleTypeOnePrivilege)
+                     {
+-                        return false;
++                        return true;
+                     }
+                 }
+ 
+                 var ruleTypeAllPrivileges = _ruleset.GetRuleResultFor(
+-                    resource, @group, null);
++                    resource, principal, null);
+ 
+                 if (null != ruleTypeAllPrivileges)
+                 {
+-                    return RuleType.Allow == ruleTypeAllPrivileges;
++                    return true;
+                 }
+             }
+ 
+-            dfs.Visited.Add(@group);
++            return null;
++        }
+ 
+-            var parentGroups = _api.Groups.GetParents(@group);
+-            foreach (var roleParent in parentGroups)
++        private bool? DoesPrincipalHaveAccessTo(
++            IPrincipal principal, ResourceId resource, Type privilege)
++        {
++            var ruleTypeOnePrivilege = _ruleset.GetRuleResultFor(
++                resource, principal, privilege);
++
++            if (null != ruleTypeOnePrivilege)
+             {
+-                dfs.Stack.Push(roleParent);
++                return RuleType.Allow == ruleTypeOnePrivilege;
++            }
++
++            // No rule existed, so use default privilege rule (i.e. All Privileges)
++            var ruleTypeAllPrivileges = _ruleset.GetRuleResultFor(
++                resource, principal, null);
++
++            if (null != ruleTypeAllPrivileges)
++            {
++                return RuleType.Allow == ruleTypeAllPrivileges;
+             }
+ 
+             return null;
+@@ -951,20 +1023,14 @@ namespace Modules.Acl
+                     "$dfs parameter may not be null");
+             }
+ 
+-            var ruleTypeOnePrivilege = _ruleset.GetRuleResultFor(
+-                resource, @group, privilege);
++            bool? hasAccess = DoesPrincipalHaveAccessTo(
++                @group, 
++                resource,
++                privilege);
+ 
+-            if (null != ruleTypeOnePrivilege)
++            if (hasAccess != null)
+             {
+-                return RuleType.Allow == ruleTypeOnePrivilege;
+-            }
+-
+-            var ruleTypeAllPrivileges = _ruleset.GetRuleResultFor(
+-                resource, @group, null);
+-
+-            if (null != ruleTypeAllPrivileges)
+-            {
+-                return RuleType.Allow == ruleTypeAllPrivileges;
++                return hasAccess;
+             }
+ 
+             dfs.Visited.Add(@group);
+@@ -1143,7 +1209,7 @@ namespace Modules.Acl
+                     {
+                         // This is the only place that calls the GetRules
+                         // method with the bool flag set to true.
+-                        PrincipalRule rules = _ruleset.ResolveRuleFor(
++                        PrincipalRule rules = _ruleset.ResolvePrincipalRuleFor(
+                             ReferenceEquals(r, NullResourceId) ? null : r,
+                             ReferenceEquals(principal, NullGroup) ?
+                                 null : principal,
+@@ -1181,7 +1247,7 @@ namespace Modules.Acl
+                 case Operation.Remove:
+                     foreach (var r in resources)
+                     {
+-                        PrincipalRule rules = _ruleset.ResolveRuleFor(
++                        PrincipalRule rules = _ruleset.ResolvePrincipalRuleFor(
+                             ReferenceEquals(NullResourceId, r) ? null : r,
+                             ReferenceEquals(NullGroup, principal) ? 
+                                 null : principal);
+@@ -1235,6 +1301,9 @@ namespace Modules.Acl
+ 
+             _rulesetRepository.Save(_ruleset);
+ 
++            // TODO: Fire off Assertion Result Cache worker.
++            //_ruleAssertCache.Execute()
++
+             return this;
+         }
+ 
+-- 
+1.9.4.msysgit.2
+

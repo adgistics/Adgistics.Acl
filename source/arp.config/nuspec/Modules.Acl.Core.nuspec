@@ -1,0 +1,35 @@
+<?xml version="1.0"?>
+<!--
+NOTE: You must manually add all the dependencies for your project within
+the <dependecies> node below.  You can typically extract these from your
+packages.config file within your project's root folder.
+-->
+<package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
+  <metadata>
+    <id>$id$</id>
+    <version>$version$</version>
+    <title>$title$</title>
+    <authors>Adgistics Ltd</authors>
+    <owners>Adgistics Ltd</owners>
+    <!--
+    <licenseUrl>http://LICENSE_URL_HERE_OR_DELETE_THIS_LINE</licenseUrl>
+    <projectUrl>http://PROJECT_URL_HERE_OR_DELETE_THIS_LINE</projectUrl>
+    <iconUrl>http://ICON_URL_HERE_OR_DELETE_THIS_LINE</iconUrl>
+    -->
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <description>$description$</description>
+    <copyright>Copyright 2014</copyright>
+    <tags>ARP</tags>
+    <dependencies>
+      <!--<dependency id="Foo.Utilities" version="1.0.0" />-->
+    </dependencies>
+    <frameworkAssemblies>
+      <frameworkAssembly assemblyName="System.Web.Extensions" />
+      <frameworkAssembly assemblyName="System.Web.Xml" />
+    </frameworkAssemblies>
+  </metadata>
+  <files>
+    <file src="$LibFrom$" target="$LibTo$" /> 
+    <file src="$SourceFrom$" target="$SourceTo$" />
+  </files>
+</package>

@@ -1,0 +1,107 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="12.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <AssemblyTitle>Adgistics.Acl-Test</AssemblyTitle>
+    <AssemblyDescription>The test library for the Adgistics ACL product.</AssemblyDescription>
+    <AssemblyProduct>Adgistics.Acl</AssemblyProduct>
+  </PropertyGroup>
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{F9673E8E-C66F-415B-8247-A1F1FFD04B17}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>Adgistics.Acl</RootNamespace>
+    <AssemblyName>Adgistics.Acl-Test</AssemblyName>
+    <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="nunit.framework">
+      <HintPath>..\packages\NUnit.2.6.3\lib\nunit.framework.dll</HintPath>
+    </Reference>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Runtime.Serialization" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="System.Data.DataSetExtensions" />
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Core\Internal\TestPropertyObject.cs" />
+    <Compile Include="Core\Internal\Utils\TestFileConstraints.cs" />
+    <Compile Include="Core\Internal\Utils\TestFilePreconditions.cs" />
+    <Compile Include="Core\Internal\Utils\TestFileUtils.cs" />
+    <Compile Include="Core\Internal\Utils\TestFileVersion.cs" />
+    <Compile Include="Core\TestAccessControlList.cs" />
+    <Compile Include="Core\TestDirectedGraph.cs" />
+    <Compile Include="Core\TestGroups.cs" />
+    <Compile Include="Example\Principals\User.cs" />
+    <Compile Include="Example\Privileges\DeletePrivilege.cs" />
+    <Compile Include="Example\Privileges\EditPrivilege.cs" />
+    <Compile Include="Example\Privileges\SubmitPrivilege.cs" />
+    <Compile Include="Example\Privileges\UpdatePrivilege.cs" />
+    <Compile Include="Example\Privileges\RevisePrivilege.cs" />
+    <Compile Include="Example\Privileges\ArchivePrivilege.cs" />
+    <Compile Include="Example\Resources\Resource.cs" />
+    <Compile Include="Example\Privileges\AdminPrivilege.cs" />
+    <Compile Include="Example\Privileges\PublishPrivilege.cs" />
+    <Compile Include="Example\Privileges\ViewPrivilege.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="TestingFileResources.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="packages.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Adgistics.Acl\Adgistics.Acl.csproj">
+      <Project>{ab7c899c-3151-4c6d-8e1e-f3179d69f577}</Project>
+      <Name>Modules.Acl.Core</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="TestFiles\test.jpeg">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="TestFiles\watermark.png">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+  <!--
+  ******************************************************************************
+  | ARP BUILD SYSTEM IMPORTS
+  | It is really important that you keep these at the bottom of your project like this -->
+  <!--
+  | The properties file is the main file with all your configuration options.
+  <Import Project="..\arp\MSBuild\ARP.properties" Condition="Exists('..\arp\MSBuild\ARP.properties')" />-->
+  <!--
+  | This is the standard CSharp Targets file.  This needs to be exactly here
+  | so that all the correct properties are configured that it depends upon.-->
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <!--
+  | This are the additional/custom ARP build targets.
+  <Import Project="..\arp\MSBuild\ARP.targets" Condition="Exists('..\arp\MSBuild\ARP.targets')" />-->
+  <!--
+  ******************************************************************************
+  -->
+</Project>

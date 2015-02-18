@@ -1,0 +1,69 @@
+# This is the 'known issues' file for any Gendarme rule checks.  You can add
+# ignores to any Gendarme rules here along with explanations on why you are 
+# ignoring them.  Please see the Gendarme documentation for more information
+# on this.
+#
+# Any line starting with '#' is ignored.
+#
+# Below is an example of a rule being ignored:
+#
+# R: Gendarme.Rules.Portability.MonoCompatibilityReviewRule
+# # We cannot fix this == check as it needs to check for nulls.  We are going to
+# # assume that the current Mono implementation of operator == shall be able to
+# # satisfy this basic requirement.
+# M: System.Void Seven.Utilities.Qname::.ctor(System.Type)
+
+R: Gendarme.Rules.Smells.AvoidLongParameterListsRule
+# This is a private method within the AccessControlList class, it is better to
+# to have all the ACL rule setting be centralized into this method, which will
+# have to have lots of parameters.
+M: Modules.Acl.AccessControlList Modules.Acl.AccessControlList::SetRule(Modules.Acl.Operation,Modules.Acl.RuleType,Modules.Acl.Group[],Modules.Acl.ResourceId[],System.String[],Modules.Acl.IAssertion)
+
+R: Gendarme.Rules.Performance.AvoidRepetitiveCastsRule
+# The value types for PropertyObjects can be of multiple types, so we have to
+# deal with multiple casting here.
+M: System.Void Modules.Acl.Internal.PropertyObject::Add(System.String,System.Object)
+
+R: Gendarme.Rules.Performance.AvoidUncalledPrivateCodeRule
+# This is a custom DirectedGraph type, and although it's methods may not be 
+# getting used right now they may get used at a later.
+T: Modules.Acl.Internal.Collections.Graphs.DirectedGraph`1
+# This is a custom collection type, and although it's methods may not be 
+# getting used right now they may get used at a later.
+T: Modules.Acl.Internal.Collections.ImmutableDictionary`2<TK,TV> Modules.Acl.Internal.Collections.ImmutableDictionary`2
+# These are being used by the test library
+M: System.Void Modules.Acl.Internal.Repositories.GroupRepository::DeleteAllGroups()
+M: System.Void Modules.Acl.Internal.Repositories.GroupRepository::ClearEventHandlers()
+# False positives
+M: System.Nullable`1<System.Boolean> Modules.Acl.AccessControlList::RoleDfsVisitAllPrivileges(Modules.Acl.Internal.Allows,Modules.Acl.Group,Modules.Acl.ResourceId,Modules.Acl.AccessControlList/DepthFirstSearchTracker)
+
+R: Gendarme.Rules.Correctness.EnsureLocalDisposalRule
+# I have marked the method to indicate that it is teh responsibility of the 
+# caller to dispose of the returned enumerator.
+M: System.Collections.IEnumerator Modules.Acl.Internal.Collections.ForwardingDictionary`2::System.Collections.IEnumerable.GetEnumerator()
+
+R: Gendarme.Rules.Correctness.ReviewInconsistentIdentityRule
+# These have been reviewed and are consistent.
+T: Modules.Acl.Group
+T: Modules.Acl.ResourceId
+
+R: Gendarme.Rules.Naming.UseCorrectSuffixRule
+# This type name is clear enough
+T: Modules.Acl.Internal.Collections.ForwardingDictionary`2
+
+R: Gendarme.Rules.Maintainability.AvoidLackOfCohesionOfMethodsRule
+# There isn't much more I can do to this class.  It is stripped down to be the
+# bare minimum.  As it is a dynamic property object though, it has to implement
+# the pretty heavy interface which is what is probably causing the 'fail'.
+T: Modules.Acl.Group
+
+R: Gendarme.Rules.Smells.AvoidLongMethodsRule
+# These are complex ACL related methods.  We will have to live with these for
+# now.
+M: System.Boolean Modules.Acl.AccessControlList::IsAllowed(Modules.Acl.Group,Modules.Acl.IResource,System.String)
+M: Modules.Acl.AccessControlList Modules.Acl.AccessControlList::SetRule(Modules.Acl.Operation,Modules.Acl.RuleType,Modules.Acl.Group[],Modules.Acl.ResourceId[],System.String[],Modules.Acl.IAssertion)
+
+R: Gendarme.Rules.Correctness.EnsureLocalDisposalRule
+# This is called within the same object instance, so no need to worry about 
+# disposal 
+M: System.Void Modules.Acl.AccessControlList::OnGroupDeleted(System.Object,Modules.Acl.Internal.Repositories.GroupDeletedEventArgs)
